@@ -1,6 +1,7 @@
 import enum
 import logging
 import os
+import re
 import secrets
 from pathlib import Path
 from typing import Optional
@@ -68,6 +69,12 @@ class Document:
     def validate_output_filename(filename: str) -> None:
         if not filename.endswith(".pdf"):
             raise errors.NonPDFOutputFileException()
+
+        illegal_chars_regex = re.compile(r'[/\\<>:"|?*]')
+        if illegal_chars_regex.search(filename):
+            # filename contains illegal characters
+            raise errors.IllegalOutputFilenameException()
+
         if not os.access(Path(filename).parent, os.W_OK):
             # in unwriteable directory
             raise errors.UnwriteableOutputDirException()
