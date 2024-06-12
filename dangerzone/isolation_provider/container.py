@@ -7,7 +7,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 from ..conversion import errors
 from ..document import Document
@@ -45,12 +45,88 @@ class Container(IsolationProvider):
         return runtime_name
 
     @staticmethod
+    def get_runtime_version() -> Tuple[int, int]:
+        """Get the major/minor parts of the Docker/Podman version.
+
+        Some of the operations we perform in this module rely on some Podman features
+        that are not available across all of our platforms. In order to have a proper
+        fallback, we need to know the Podman version. More specifically, we're fine with
+        just knowing the major and minor version, since writing/installing a full-blown
+        semver parser is an overkill.
+        """
+        # Get the Docker/Podman version, using a Go template.
+        runtime = Container.get_runtime_name()
+        cmd = [runtime, "version", "-f", "{{.Client.Version}}"]
+        try:
+            version = subprocess.run(
+                cmd, capture_output=True, check=True
+            ).stdout.decode()
+        except Exception as e:
+            msg = f"Could not get the version of the {runtime.capitalize()} tool: {e}"
+            raise RuntimeError(msg) from e
+
+        # Parse this version and return the major/minor parts, since we don't need the
+        # rest.
+        try:
+            major, minor, _ = version.split(".", 3)
+            return (int(major), int(minor))
+        except Exception as e:
+            msg = (
+                f"Could not parse the version of the {runtime.capitalize()} tool"
+                f" (found: '{version}') due to the following error: {e}"
+            )
+            raise RuntimeError(msg)
+
+    @staticmethod
     def get_runtime() -> str:
         container_tech = Container.get_runtime_name()
         runtime = shutil.which(container_tech)
         if runtime is None:
             raise NoContainerTechException(container_tech)
         return runtime
+
+    @staticmethod
+    def get_runtime_security_args() -> List[str]:
+        """Security options applicable to the outer Dangerzone container.
+
+        Our security precautions for the outer Dangerzone container are the following:
+        * Do not let the container assume new privileges.
+        * Drop all capabilities, except for CAP_SYS_CHROOT, which is necessary for
+          running gVisor.
+        * Do not allow access to the network stack.
+        * Run the container as the unprivileged `dangerzone` user.
+
+        For Podman specifically, where applicable, we also add the following:
+        * Do not log the container's output.
+        * Use a newer seccomp policy (for Podman 3.x versions only).
+        * Do not map the host user to the container, with `--userns nomap` (available
+          from Podman 4.1 onwards)
+          - This particular argument is specified in `start_doc_to_pixels_proc()`, but
+            should move here once #748 is merged.
+        """
+        if Container.get_runtime_name() == "podman":
+            security_args = ["--log-driver", "none"]
+            security_args += ["--security-opt", "no-new-privileges"]
+
+            # NOTE: Ubuntu Focal/Jammy have Podman version 3, and their seccomp policy
+            # does not include the `ptrace()` syscall. This system call is required for
+            # running gVisor, so we enforce a newer seccomp policy file in that case.
+            # This file has been copied as is [1] from the official Podman repo.
+            #
+            # [1] https://github.com/containers/common/blob/d3283f8401eeeb21f3c59a425b5461f069e199a7/pkg/seccomp/seccomp.json
+            if Container.get_runtime_version() < (4, 0):
+                seccomp_json_path = get_resource_path("seccomp.gvisor.json")
+                security_args += ["--security-opt", f"seccomp={seccomp_json_path}"]
+        else:
+            security_args = ["--security-opt=no-new-privileges:true"]
+
+        security_args += ["--cap-drop", "all"]
+        security_args += ["--cap-add", "SYS_CHROOT"]
+
+        security_args += ["--network=none"]
+        security_args += ["-u", "dangerzone"]
+
+        return security_args
 
     @staticmethod
     def install() -> bool:
@@ -185,25 +261,12 @@ class Container(IsolationProvider):
         extra_args: List[str] = [],
     ) -> subprocess.Popen:
         container_runtime = self.get_runtime()
-
-        if self.get_runtime_name() == "podman":
-            security_args = ["--log-driver", "none"]
-            security_args += ["--security-opt", "no-new-privileges"]
-            security_args += ["--userns", "keep-id"]
-        else:
-            security_args = ["--security-opt=no-new-privileges:true"]
-
-        # drop all linux kernel capabilities
-        security_args += ["--cap-drop", "all"]
-        user_args = ["-u", "dangerzone"]
+        security_args = self.get_runtime_security_args()
         enable_stdin = ["-i"]
         set_name = ["--name", name]
-
         prevent_leakage_args = ["--rm"]
-
         args = (
-            ["run", "--network", "none"]
-            + user_args
+            ["run"]
             + security_args
             + prevent_leakage_args
             + enable_stdin
@@ -212,7 +275,6 @@ class Container(IsolationProvider):
             + [self.CONTAINER_NAME]
             + command
         )
-
         args = [container_runtime] + args
         return self.exec(args)
 
@@ -258,6 +320,36 @@ class Container(IsolationProvider):
             "-e",
             f"OCR_LANGUAGE={ocr_lang}",
         ]
+        # XXX: Until #748 gets merged, we have to run our pixels to PDF phase in a
+        # container, which involves mounting two temp dirs. This does not bode well with
+        # gVisor for two reasons:
+        #
+        # 1. Our gVisor integration chroot()s into /home/dangerzone/dangerzone-image/rootfs,
+        #    meaning that the location of the temp dirs must be relevant to that path.
+        # 2. Reading and writing to these temp dirs requires permissions which are not
+        #    available to the user within gVisor's user namespace.
+        #
+        # For these reasons, and because the pixels to PDF phase is more trusted (and
+        # will soon stop being containerized), we circumvent gVisor support by doing the
+        # following:
+        #
+        # 1. Override our entrypoint script with a no-op command (/usr/bin/env).
+        # 2. Set the PYTHONPATH so that we can import the Python code within
+        #    /home/dangerzone/dangerzone-image/rootfs
+        # 3. Run the container as the root user, so that it can always write to the
+        #    mounted directories. This container is trusted, so running as root has no
+        #    impact to the security of Dangerzone.
+        img_root = "/home/dangerzone/dangerzone-image/rootfs"
+        extra_args += [
+            "--entrypoint",
+            "/usr/bin/env",
+            "-e",
+            f"PYTHONPATH={img_root}/opt/dangerzone:{img_root}/usr/lib/python3.12/site-packages",
+            "-e",
+            f"TESSDATA_PREFIX={img_root}/usr/share/tessdata",
+            "-u",
+            "root",
+        ]
 
         name = self.pixels_to_pdf_container_name(document)
         pixels_to_pdf_proc = self.exec_container(command, name, extra_args)
@@ -296,8 +388,15 @@ class Container(IsolationProvider):
             "-m",
             "dangerzone.conversion.doc_to_pixels",
         ]
+        # NOTE: Using `--userns nomap` is available only on Podman >= 4.1.0.
+        # XXX: Move this under `get_runtime_security_args()` once #748 is merged.
+        extra_args = []
+        if Container.get_runtime_name() == "podman":
+            if Container.get_runtime_version() >= (4, 1):
+                extra_args += ["--userns", "nomap"]
+
         name = self.doc_to_pixels_container_name(document)
-        return self.exec_container(command, name=name)
+        return self.exec_container(command, name=name, extra_args=extra_args)
 
     def terminate_doc_to_pixels_proc(
         self, document: Document, p: subprocess.Popen
