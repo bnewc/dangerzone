@@ -47,7 +47,7 @@ class IllegalOutputFilenameException(DocumentFilenameException):
 
     def __init__(self) -> None:
         super().__init__(
-            "Filename must not contain the following characters: /\<>:\"|?*"
+            "Filename must not contain the following characters: <>:\"|?*"
         )        
 
 
