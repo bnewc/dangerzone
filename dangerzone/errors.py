@@ -46,9 +46,7 @@ class IllegalOutputFilenameException(DocumentFilenameException):
     """Exception for when the output file contains illegal characters."""
 
     def __init__(self) -> None:
-        super().__init__(
-            "Filename must not contain the following characters: <>:\"|?*"
-        )        
+        super().__init__("Filename must not contain the following characters: <>:\"|?*")        
 
 
 class UnwriteableOutputDirException(DocumentFilenameException):
