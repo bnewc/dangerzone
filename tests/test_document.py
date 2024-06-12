@@ -80,7 +80,7 @@ def test_output_file_not_pdf(tmp_path: Path) -> None:
 
 
 def test_illegal_output_filename(tmp_path: Path) -> None:
-    illegal_name = str(tmp_path / "<illegal*name>")
+    illegal_name = str(tmp_path / "<illegal*name>.pdf")
     d = Document()
 
     with pytest.raises(errors.IllegalOutputFilenameException):
