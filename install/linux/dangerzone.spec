@@ -32,7 +32,7 @@ Name:           dangerzone-qubes
 Name:           dangerzone
 %endif
 
-Version:        0.6.1
+Version:        0.7.0
 Release:        1%{?dist}
 Summary:        Take potentially dangerous PDFs, office documents, or images and convert them to safe PDFs
 
@@ -220,16 +220,6 @@ convert the documents within a secure sandbox.
 
 %prep
 %autosetup -p1 -n dangerzone-%{version}
-
-# XXX: Replace the PySide6 dependency in the pyproject.toml file with PySide2,
-# since the former did not exist until Fedora 39, where we packaged PySide6 [1].
-# Once Fedora 38 is no longer supported, we should remove this.
-#
-# [1]: https://github.com/freedomofpress/dangerzone/issues/606
-%if 0%{?fedora} == 38
-sed -i 's/^PySide6.*$/PySide2 = "*"/' pyproject.toml
-%endif
-
 
 %generate_buildrequires
 %pyproject_buildrequires -R
