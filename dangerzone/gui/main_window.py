@@ -772,7 +772,7 @@ class SettingsWidget(QtWidgets.QWidget):
         self.dot_pdf_validator = QRegExValidator(QRegEx(r".*\.[Pp][Dd][Ff]"))
         if platform.system() == "Linux":
             illegal_chars_regex = r"[\\]"
-        elif platform.sysem() == "Darwin":
+        elif platform.system() == "Darwin":
             illegal_chars_regex = r"[:\\]"
         else:
             illegal_chars_regex = r"[\"*/:<>?\\|]"
