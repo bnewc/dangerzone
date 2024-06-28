@@ -1050,6 +1050,7 @@ class SettingsWidget(QtWidgets.QWidget):
         # Start!
         self.start_clicked.emit()
 
+
 class ConvertTask(QtCore.QObject):
     finished = QtCore.Signal(bool)
     update = QtCore.Signal(bool, str, int)
