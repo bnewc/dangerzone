@@ -79,7 +79,7 @@ def test_output_file_not_pdf(tmp_path: Path) -> None:
     assert not os.path.exists(docx_file)
 
 
-@pytest.mark.skipif(platform.system()! == "Windows", reason="Windows-specific")
+@pytest.mark.skipif(platform.system() != "Windows", reason="Windows-specific")
 def test_illegal_output_filename_windows(tmp_path: Path) -> None:
     d = Document()
     
@@ -89,7 +89,7 @@ def test_illegal_output_filename_windows(tmp_path: Path) -> None:
                 d.output_filename = istr(tmp_path / f"illegal{char}name.pdf")
 
 
-@pytest.mark.skipif(platform.system()! == "Darwin", reason="MacOS-specific")
+@pytest.mark.skipif(platform.system() != "Darwin", reason="MacOS-specific")
 def test_illegal_output_filename_macos(tmp_path: Path) -> None:
     illegal_name = str(tmp_path / "illegal\\name.pdf")
     d = Document()
@@ -98,7 +98,7 @@ def test_illegal_output_filename_macos(tmp_path: Path) -> None:
         d.output_filename = illegal_name
 
 
-@pytest.mark.skipif(platform.system()! == "Linux", reason="Linux-specific")
+@pytest.mark.skipif(platform.system() != "Linux", reason="Linux-specific")
 def test_illegal_output_filename_windows(tmp_path: Path) -> None:
     illegal_name = str(tmp_path / "illegal/name.pdf")
     d = Document()
