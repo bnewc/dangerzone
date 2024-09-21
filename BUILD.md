@@ -49,7 +49,7 @@ Install dependencies:
   ```bash
   sudo apt install -y python3.9
   ```
-  
+
   Poetry will automatically pick up the correct version when running.
 </details>
     </td>
@@ -58,8 +58,8 @@ Install dependencies:
 
 
 ```sh
-sudo apt install -y podman dh-python build-essential fakeroot make libqt6gui6 \
-    pipx python3 python3-dev python3-stdeb python3-all
+sudo apt install -y podman dh-python build-essential make libqt6gui6 \
+    pipx python3 python3-dev
 ```
 
 Install Poetry using `pipx` (recommended) and add it to your `$PATH`:
@@ -277,8 +277,17 @@ test it.
 1. Install the `.rpm` package you just copied
 
    ```sh
+   sudo dnf install 'dnf-command(config-manager)'
+   sudo dnf config-manager --add-repo=https://packages.freedom.press/yum-tools-prod/dangerzone/dangerzone.repo
    sudo dnf install ~/QubesIncoming/dz/*.rpm
    ```
+
+   In the above steps, we add the Dangerzone repo because it includes the
+   necessary PySide6 RPM in order to make Dangerzone work.
+
+   > [!NOTE]
+   > During the installation, you will be asked to
+   > [verify the Dangerzone GPG key](INSTALL.md#verifying-dangerzone-gpg-key).
 
 2. Shutdown the `fedora-40-dz` template
 

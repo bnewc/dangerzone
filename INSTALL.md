@@ -18,6 +18,7 @@ Dangerzone is available for:
 - Debian 11 (bullseye)
 - Fedora 40
 - Fedora 39
+- Tails
 - Qubes OS (beta support)
 
 ### Ubuntu, Debian
@@ -45,12 +46,6 @@ Dangerzone is available for:
   sudo apt update
   ```
 
-  Also, you need to install the `python-all` package, due to an `stdeb` bug that
-  existed before v0.9.1:
-
-  ```
-  sudo apt-get install python-all -y
-  ```
 </details>
     </td>
   </tr>
@@ -253,6 +248,12 @@ column to "Selected".
 You can now launch Dangerzone from the list of applications for your qube, and
 pass it a file to sanitize.
 
+## Tails
+
+Dangerzone is not yet available by default in Tails, but we have collaborated
+with the Tails team to offer manual
+[installation instructions](https://tails.net/doc/persistent_storage/additional_software/dangerzone/index.en.html)
+for Tails users.
 
 ## Build from source
 

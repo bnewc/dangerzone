@@ -3,6 +3,7 @@
 import argparse
 import os
 import pathlib
+import platform
 import shutil
 import subprocess
 import sys
@@ -139,8 +140,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 RUN apt-get update \
     && apt-get install -y --no-install-recommends dh-python make build-essential \
-        git fakeroot {qt_deps} pipx python3 python3-dev python3-venv python3-stdeb \
-        python3-all \
+        git {qt_deps} pipx python3 python3-venv dpkg-dev debhelper python3-setuptools \
     && rm -rf /var/lib/apt/lists/*
 # NOTE: `pipx install poetry` fails on Ubuntu Focal, when installed through APT. By
 # installing the latest version, we sidestep this issue.
@@ -152,7 +152,7 @@ RUN bash -c 'if [[ "$(pipx --version)" < "1" ]]; then \
                 && rm -rf /var/lib/apt/lists/*; \
               else true; fi'
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends mupdf \
+    && apt-get install -y --no-install-recommends mupdf thunar \
     && rm -rf /var/lib/apt/lists/*
 """
 
@@ -166,7 +166,7 @@ RUN dnf install -y git rpm-build podman python3 python3-devel python3-poetry-cor
 # See https://github.com/freedomofpress/dangerzone/issues/286#issuecomment-1347149783
 RUN rpm --restore shadow-utils
 
-RUN dnf install -y mupdf && dnf clean all
+RUN dnf install -y mupdf thunar && dnf clean all
 """
 
 # The Dockerfile for building a development environment for Dangerzone. Parts of the
@@ -210,7 +210,7 @@ RUN cd /home/user/dangerzone && poetry --no-ansi install
 DOCKERFILE_BUILD_DEBIAN_DEPS = r"""
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends mupdf \
+    && apt-get install -y --no-install-recommends mupdf thunar \
     && rm -rf /var/lib/apt/lists/*
 """
 
@@ -220,7 +220,7 @@ RUN dnf install -y /tmp/pyside6.rpm
 """
 
 DOCKERFILE_BUILD_FEDORA_DEPS = r"""
-RUN dnf install -y mupdf && dnf clean all
+RUN dnf install -y mupdf thunar && dnf clean all
 
 # FIXME: Drop this fix after it's resolved upstream.
 # See https://github.com/freedomofpress/dangerzone/issues/286#issuecomment-1347149783
@@ -273,9 +273,27 @@ def git_root():
     return pathlib.Path(path)
 
 
+def user_data():
+    """Get the user data dir in (which differs on different OSes)"""
+    home = pathlib.Path.home()
+    system = platform.system()
+
+    if system == "Windows":
+        return home / "AppData" / "Local"
+    elif system == "Linux":
+        return home / ".local" / "share"
+    elif system == "Darwin":
+        return home / "Library" / "Application Support"
+
+
+def dz_dev_root():
+    """Get the directory where we will store dangerzone-dev related files"""
+    return user_data() / "dangerzone-dev"
+
+
 def distro_root(distro, version):
     """Get the root directory for the specific Linux environment."""
-    return git_root() / f"dev_scripts/envs/{distro}/{version}"
+    return dz_dev_root() / "envs" / distro / version
 
 
 def distro_state(distro, version):
@@ -358,9 +376,10 @@ class PySide6Manager:
             file=sys.stderr,
         )
         try:
-            with urllib.request.urlopen(self.rpm_url) as r, open(
-                self.rpm_local_path, "wb"
-            ) as f:
+            with (
+                urllib.request.urlopen(self.rpm_url) as r,
+                open(self.rpm_local_path, "wb") as f,
+            ):
                 shutil.copyfileobj(r, f)
         except:
             # NOTE: We purposefully catch all exceptions, since we want to catch Ctrl-C
@@ -410,6 +429,28 @@ class Env:
     def from_args(cls, args):
         """Create an Env class from CLI arguments"""
         return cls(distro=args.distro, version=args.version, runtime=args.runtime)
+
+    def find_dz_package(self, path, pattern):
+        """Get the full path of the Dangerzone package in the specified dir.
+
+        There are times where we don't know the exact name of the Dangerzone package
+        that we've built, e.g., because its patch level may have changed.
+
+        Auto-detect the Dangerzone package based on a pattern that a user has provided,
+        and fail if there are none, or multiple matches. If there's a single match, then
+        return the full path for the package.
+        """
+        matches = list(path.glob(pattern))
+        if len(matches) == 0:
+            raise RuntimeError(
+                f"Could not find Dangerzone package '{pattern}' in '{path}'"
+            )
+        elif len(matches) > 1:
+            raise RuntimeError(
+                f"Found more than one matches for Dangerzone package '{pattern}' in"
+                f" '{path}'"
+            )
+        return matches[0]
 
     def runtime_run(self, *args):
         """Run a command for a specific container runtime.
@@ -610,31 +651,33 @@ class Env:
         version = dz_version()
         if self.distro == "fedora":
             install_deps = DOCKERFILE_BUILD_FEDORA_DEPS
-            package = f"dangerzone-{version}-1.fc{self.version}.x86_64.rpm"
-            package_src = git_root() / "dist" / package
+            package_pattern = f"dangerzone-{version}-*.fc{self.version}.x86_64.rpm"
+            package_src = self.find_dz_package(git_root() / "dist", package_pattern)
+            package = package_src.name
             package_dst = build_dir / package
             install_cmd = "dnf install -y"
 
-            # NOTE: For Fedora 39+ onward, we check if a PySide6 RPM package exists in
+            # NOTE: For Fedora 39, we check if a PySide6 RPM package exists in
             # the user's system. If not, we either throw an error or download it from
             # FPF's repo, according to the user's choice.
-            pyside6 = PySide6Manager(self.distro, self.version)
-            if not pyside6.is_rpm_present:
-                if download_pyside6:
-                    pyside6.download_rpm()
-                else:
-                    print(
-                        PYSIDE6_NOT_FOUND_ERROR.format(
-                            pyside6_local_path=pyside6.rpm_local_path,
-                            pyside6_url=pyside6.rpm_url,
-                        ),
-                        file=sys.stderr,
-                    )
-                    return 1
-            shutil.copy(pyside6.rpm_local_path, build_dir / pyside6.rpm_name)
-            install_deps = (
-                DOCKERFILE_BUILD_FEDORA_DEPS + DOCKERFILE_BUILD_FEDORA_39_DEPS
-            ).format(pyside6_rpm=pyside6.rpm_name)
+            if self.version == "39":
+                pyside6 = PySide6Manager(self.distro, self.version)
+                if not pyside6.is_rpm_present:
+                    if download_pyside6:
+                        pyside6.download_rpm()
+                    else:
+                        print(
+                            PYSIDE6_NOT_FOUND_ERROR.format(
+                                pyside6_local_path=pyside6.rpm_local_path,
+                                pyside6_url=pyside6.rpm_url,
+                            ),
+                            file=sys.stderr,
+                        )
+                        return 1
+                shutil.copy(pyside6.rpm_local_path, build_dir / pyside6.rpm_name)
+                install_deps = (
+                    DOCKERFILE_BUILD_FEDORA_DEPS + DOCKERFILE_BUILD_FEDORA_39_DEPS
+                ).format(pyside6_rpm=pyside6.rpm_name)
         else:
             install_deps = DOCKERFILE_BUILD_DEBIAN_DEPS
             if self.distro == "ubuntu" and self.version in ("20.04", "focal"):
@@ -652,8 +695,9 @@ class Env:
                 "noble",
             ):
                 install_deps = DOCKERFILE_UBUNTU_REM_USER + DOCKERFILE_BUILD_DEBIAN_DEPS
-            package = f"dangerzone_{version}-1_all.deb"
-            package_src = git_root() / "deb_dist" / package
+            package_pattern = f"dangerzone_{version}-*_*.deb"
+            package_src = self.find_dz_package(git_root() / "deb_dist", package_pattern)
+            package = package_src.name
             package_dst = build_dir / package
             install_cmd = "apt-get update && apt-get install -y"
 

@@ -2,24 +2,47 @@
 # latest release of Dangerzone, and offer our analysis.
 
 ignore:
-  # CVE-2023-7104
+  - vulnerability: CVE-2024-5535
+  # CVE-2024-5171
   # =============
   #
-  # NVD Entry: https://nvd.nist.gov/vuln/detail/CVE-2023-7104
+  # NVD Entry: https://nvd.nist.gov/vuln/detail/CVE-2024-5171
   # Verdict: Dangerzone is not affected. The rationale is the following:
   #
-  #   1. This CVE affects malicious/corrupted SQLite DBs.
-  #   2. Databases can be loaded either via LibreOffice Calc or Base. Files for
-  #      the latter are not a valid input to Dangerzone.
-  #   3. Based on the LibreOffice Calc guide [1], users can only refer to
-  #      external databases, not embed them in a spreadsheet.
-  #   4. The actual CVSS score for this vulnerability is High, according to
-  #      NIST, not Critical.
+  # The affected library, `libaom.so`, is linked by GStreamer's `libgstaom.so`
+  # library. The vulnerable `aom_img_alloc` function is only used when
+  # **encoding** a video to AV1. LibreOffce uses the **decode** path instead,
+  # when generating thumbnails.
   #
-  # [1]: From https://wiki.documentfoundation.org/images/f/f4/CG75-CalcGuide.pdf:
+  # See also: https://github.com/freedomofpress/dangerzone/issues/895
+  - vulnerability: CVE-2024-5171
+
+  # CVE-2024-45491, CVE-2024-45492
+  # ===============================
   #
-  #      > The possible data sources for the pivot table are a Calc spreadsheet
-  #      > or an external data source that is registered in LibreOffice. [...]
-  #      > A registered data source is a connection to data held in a database
-  #      > outside of LibreOffice.
-  - vulnerability: CVE-2023-7104
+  # NVD Entries:
+  # * https://nvd.nist.gov/vuln/detail/CVE-2024-45491
+  # * https://nvd.nist.gov/vuln/detail/CVE-2024-45492
+  #
+  # Verdict: Dangerzone is not affected. The rationale is the following:
+  #
+  # The vulnerabilities that have been assigned to these CVEs affect only 32-bit
+  # architectures. Dangerzone ships only 64-bit images to users.
+  #
+  # See also: https://github.com/freedomofpress/dangerzone/issues/913
+  - vulnerability: CVE-2024-45491
+  - vulnerability: CVE-2024-45492
+
+  # CVE-2024-45490
+  # ==============
+  #
+  # NVD Entry: https://nvd.nist.gov/vuln/detail/CVE-2024-45490
+  # Verdict: Dangerzone is not affected. The rationale is the following:
+  #
+  # In order to exploit this bug, the caller must pass a negative length to the
+  # `XML_ParseBuffer` function. This function is not directly used by
+  # LibreOffice, which instead uses a higher-level wrapper. Therefore, our
+  # understanding is that this path cannot be exploited by attackers.
+  #
+  # See also: https://github.com/freedomofpress/dangerzone/issues/913
+  - vulnerability: CVE-2024-45490

@@ -15,6 +15,9 @@ from ..util import get_tmp_dir  # NOQA : required for mocking in our tests.
 from ..util import get_resource_path, get_subprocess_startupinfo
 from .base import PIXELS_TO_PDF_LOG_END, PIXELS_TO_PDF_LOG_START, IsolationProvider
 
+TIMEOUT_KILL = 5  # Timeout in seconds until the kill command returns.
+
+
 # Define startupinfo for subprocesses
 if platform.system() == "Windows":
     startupinfo = subprocess.STARTUPINFO()  # type: ignore [attr-defined]
@@ -64,7 +67,10 @@ class Container(IsolationProvider):
         cmd = [runtime, "version", "-f", query]
         try:
             version = subprocess.run(
-                cmd, capture_output=True, check=True
+                cmd,
+                startupinfo=get_subprocess_startupinfo(),
+                capture_output=True,
+                check=True,
             ).stdout.decode()
         except Exception as e:
             msg = f"Could not get the version of the {runtime.capitalize()} tool: {e}"
@@ -100,6 +106,9 @@ class Container(IsolationProvider):
           running gVisor.
         * Do not allow access to the network stack.
         * Run the container as the unprivileged `dangerzone` user.
+        * Set the `container_engine_t` SELinux label, which allows gVisor to work on
+          SELinux-enforcing systems
+          (see https://github.com/freedomofpress/dangerzone/issues/880).
 
         For Podman specifically, where applicable, we also add the following:
         * Do not log the container's output.
@@ -135,6 +144,7 @@ class Container(IsolationProvider):
 
         security_args += ["--cap-drop", "all"]
         security_args += ["--cap-add", "SYS_CHROOT"]
+        security_args += ["--security-opt", "label=type:container_engine_t"]
 
         security_args += ["--network=none"]
         security_args += ["-u", "dangerzone"]
@@ -232,7 +242,7 @@ class Container(IsolationProvider):
         # `int`.
         #
         # See https://stackoverflow.com/a/37888668
-        if not type(val) == _type:
+        if type(val) is not _type:
             raise ValueError("Status field has incorrect type")
 
     def parse_progress_trusted(self, document: Document, line: str) -> None:
@@ -308,8 +318,19 @@ class Container(IsolationProvider):
             # have stopped right before invoking this command. In that case, the
             # command's output will contain some error messages, so we capture them in
             # order to silence them.
+            #
+            # NOTE: We specify a timeout for this command, since we've seen it hang
+            # indefinitely for specific files. See:
+            # https://github.com/freedomofpress/dangerzone/issues/854
             subprocess.run(
-                cmd, capture_output=True, startupinfo=get_subprocess_startupinfo()
+                cmd,
+                capture_output=True,
+                startupinfo=get_subprocess_startupinfo(),
+                timeout=TIMEOUT_KILL,
+            )
+        except subprocess.TimeoutExpired:
+            log.warning(
+                f"Could not kill container '{name}' within {TIMEOUT_KILL} seconds"
             )
         except Exception as e:
             log.exception(

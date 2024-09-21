@@ -158,6 +158,10 @@ Run Dangerzone against a list of documents, and tick all options. Ensure that:
 Run Dangerzone against a set of documents that you drag-n-drop. Files should be
 added and conversion should run without issue.
 
+> [!TIP]
+> On our end-user container environments for Linux, we can start a file manager
+> with `thunar &`.
+
 #### 9. Dangerzone CLI succeeds in converting multiple documents
 
 _(Only for Windows and Linux)_
@@ -237,7 +241,7 @@ Install dependencies:
   ```bash
   sudo apt install -y python3.9
   ```
-  
+
   Poetry will automatically pick up the correct version when running.
 </details>
     </td>
@@ -246,8 +250,8 @@ Install dependencies:
 
 
 ```sh
-sudo apt install -y podman dh-python build-essential fakeroot make libqt6gui6 \
-    pipx python3 python3-dev python3-stdeb python3-all
+sudo apt install -y podman dh-python build-essential make libqt6gui6 \
+    pipx python3 python3-dev
 ```
 
 Install Poetry using `pipx` (recommended) and add it to your `$PATH`:
@@ -892,7 +896,7 @@ class QALinux(QABase):
         self.run_tests()
         self.build_package()
         self.build_qa_image()
-        self.qa_scenarios(skip=[1, 2, 8, 9])
+        self.qa_scenarios(skip=[1, 2, 3, 10, 11])
 
 
 class QADebianBased(QALinux):
