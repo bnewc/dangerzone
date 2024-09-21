@@ -823,8 +823,8 @@ class SettingsWidget(QtWidgets.QWidget):
             QRegEx = QtCore.QRegularExpression
             QRegExValidator = QtGui.QRegularExpressionValidator
         else:
-            QRegEx = QtCore.QRegExp
-            QRegExValidator = QtGui.QRegExpValidator
+            QRegEx = QtCore.QRegExp  # type: ignore [assignment]
+            QRegExValidator = QtGui.QRegExpValidator  # type: ignore [assignment]
         self.dot_pdf_validator = QRegExValidator(QRegEx(r".*\.[Pp][Dd][Ff]"))
         if platform.system() == "Linux":
             illegal_chars_regex = r"[/]"

@@ -82,11 +82,10 @@ def test_output_file_not_pdf(tmp_path: Path) -> None:
 @pytest.mark.skipif(platform.system() != "Windows", reason="Windows-specific")
 def test_illegal_output_filename_windows(tmp_path: Path) -> None:
     d = Document()
-    
+
     for char in '\\"*/:<>?':
-        with self.subTest(char=char):
-            with pytest.raises(errors.IllegalOutputFilenameException):
-                d.output_filename = istr(tmp_path / f"illegal{char}name.pdf")
+        with pytest.raises(errors.IllegalOutputFilenameException):
+            d.output_filename = str(tmp_path / f"illegal{char}name.pdf")
 
 
 @pytest.mark.skipif(platform.system() != "Darwin", reason="MacOS-specific")
@@ -99,7 +98,7 @@ def test_illegal_output_filename_macos(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(platform.system() != "Linux", reason="Linux-specific")
-def test_illegal_output_filename_windows(tmp_path: Path) -> None:
+def test_illegal_output_filename_linux(tmp_path: Path) -> None:
     illegal_name = str(tmp_path / "illegal/name.pdf")
     d = Document()
 
