@@ -76,15 +76,13 @@ class Document:
             illegal_chars_regex = re.compile(r"[\"*/:<>?\\|]")
         else:
             final_filename = PurePosixPath(filename).name
-            if platform.system() == "Darwin":
-                illegal_chars_regex = re.compile(r"[\\]")
-            else:
-                illegal_chars_regex = re.compile(r"[]")
+            illegal_chars_regex = re.compile(r"[\\]")
 
-        match = illegal_chars_regex.search(final_filename)
-        if match:
-            # filename contains illegal characters
-            raise errors.IllegalOutputFilenameException(match.group(0))
+        if platform.system() in ("Windows", "Darwin"):
+            match = illegal_chars_regex.search(final_filename)
+            if match:
+                # filename contains illegal characters
+                raise errors.IllegalOutputFilenameException(match.group(0))
 
         if not os.access(Path(filename).parent, os.W_OK):
             # in unwriteable directory
