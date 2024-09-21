@@ -77,9 +77,9 @@ class Document:
         else:
             final_filename = PurePosixPath(filename).name
             if platform.system() == "Darwin":
-                illegal_chars_regex = re.compile(r"[:\\]")
-            else:
                 illegal_chars_regex = re.compile(r"[\\]")
+            else:
+                illegal_chars_regex = re.compile(r"[]")
 
         match = illegal_chars_regex.search(final_filename)
         if match:
