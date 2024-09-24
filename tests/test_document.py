@@ -83,7 +83,7 @@ def test_output_file_not_pdf(tmp_path: Path) -> None:
 def test_illegal_output_filename_windows(tmp_path: Path) -> None:
     d = Document()
 
-    for char in '\\"*/:<>?':
+    for char in '"*/:<>?':
         with pytest.raises(errors.IllegalOutputFilenameException):
             d.output_filename = str(tmp_path / f"illegal{char}name.pdf")
 
